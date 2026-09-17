@@ -1,5 +1,7 @@
 # DSSOC Membership Dashboard
 
+[![AI-DECLARATION: copilot](https://img.shields.io/badge/䷼%20AI--DECLARATION-copilot-fee2e2?labelColor=fee2e2)](https://ai-declaration.md)
+
 Vue 3 + D3 read-only front end for the Unified DB API. Standalone repo — no shared
 imports with `dssoc-unifieddb`.
 
@@ -7,6 +9,11 @@ imports with `dssoc-unifieddb`.
 cp .env.example .env      # set VITE_API_BASE_URL
 npm install
 npm run dev
+```
+
+```bash
+bun install
+bun run dev
 ```
 
 ## Pages
@@ -40,23 +47,8 @@ in `sessionStorage` (15-minute `exp`, gone when the tab closes).
 - `members_by_year_level` — horizontal bars
 - `classification_by_degree_program` — top ten programs
 
-## Notes on the API, for the backend side
+## Roadmaps
 
-1. **`GET /reaffiliations` cannot back a named list.** The `Reaffiliation` response model
-   has no `dssoc_id` and no name fields, so the rows come back anonymous. This dashboard
-   uses `GET /members?year&sem` instead. If you want the list page to show designation or
-   committee alongside the name, `GET /members` needs a `$lookup` into
-   `fact_reaffiliation`, or `Reaffiliation` needs `dssoc_id` plus a member join.
-2. **`classification_by_semester` is not scoped.** Its pipeline has no `$match`, so it
-   groups every document in `fact_reaffiliation` across all years and ignores
-   `is_deleted`. It is deliberately not charted here — adding `{"$match": year_match}`
-   would make it usable.
-3. **`comm_id = Optional[str]` in `fetch_reaffiliations`** is an assignment, not an
-   annotation, so the default value is the typing object itself. It should be
-   `comm_id: Optional[str] = None`.
-4. **`total_by_semester` includes deferrals**, since its pipeline has no designation
-   filter. The headline count is therefore "records for the semester", and deferrals are
-   shown separately rather than subtracted.
-5. `GET /members` filters on `year` + `semester`, while `GET /reaffiliations` filters on a
-   `dssoc_id` regex — the two paths can diverge for members whose `dssoc_id` prefix does
-   not match their reaffiliation semester.
+1. Minimum Functioning Dashboard
+2. Conversion to Vue + TS
+3. Distribution of user accounts
