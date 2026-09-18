@@ -19,8 +19,8 @@ async function signOut() {
   <div v-if="shell" class="layout">
     <aside class="rail">
       <div class="mark">
-        <span class="mark-abbr">DS</span>
-        <span class="mark-name">Data Science Society<br />membership</span>
+        <span class="mark-abbr">DSSoc</span>
+        <span class="mark-name">Unified Database<br />Dashboard</span>
       </div>
 
       <nav>
@@ -29,8 +29,13 @@ async function signOut() {
       </nav>
 
       <div class="account">
-        <p class="who">{{ auth.username.value }}</p>
-        <p class="perms figure">{{ auth.permissions.value.join(' · ') || 'no permissions' }}</p>
+        <div class="account-card">
+          <p class="who">{{ auth.username.value }}</p>
+          <template v-if="auth.isLinkedMember.value">
+            <RouterLink :to="{ name: 'profile' }" class="profile-link">View profile →</RouterLink>
+          </template>
+          <p v-else class="unlinked">Not linked to member data</p>
+        </div>
         <button class="btn btn-quiet sign-out" :disabled="signingOut" @click="signOut">
           {{ signingOut ? 'Signing out…' : 'Sign out' }}
         </button>
@@ -122,11 +127,33 @@ nav a.router-link-active {
   font-size: 0.9rem;
 }
 
-.perms {
-  margin: 0.15rem 0 0.8rem;
-  font-size: 0.68rem;
-  color: #868d88;
-  word-break: break-word;
+.account-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #2f3433;
+  border-radius: 2px;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.account-card .who {
+  margin: 0 0 0.3rem;
+}
+
+.profile-link {
+  font-size: 0.75rem;
+  color: #9eb8a8;
+  text-decoration: none;
+}
+
+.profile-link:hover {
+  color: #fff;
+  text-decoration: underline;
+}
+
+.unlinked {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #5a615e;
 }
 
 .sign-out {
