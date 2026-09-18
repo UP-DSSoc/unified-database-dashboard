@@ -17,7 +17,10 @@ export function configureAuth({ tokenGetter, unauthorizedHandler }) {
   onUnauthorized = unauthorizedHandler
 }
 
-async function request(path, { method = 'GET', body, auth = true, params } = {}) {
+async function request(
+  path, 
+  { method = 'GET', body, auth = true, params } = {}
+) {
   const url = new URL(BASE + path)
   if (params) {
     for (const [k, v] of Object.entries(params)) {
@@ -25,6 +28,7 @@ async function request(path, { method = 'GET', body, auth = true, params } = {})
     }
   }
 
+  // NOTE: Read this section on header request
   const headers = { Accept: 'application/json' }
   if (body) headers['Content-Type'] = 'application/json'
   if (BYPASS) headers['x-vercel-protection-bypass'] = BYPASS
@@ -82,12 +86,19 @@ export const api = {
 
   // GET /reaffiliations/{YYYY[AB]}/summary -> ReaffiliationAnalytics
   // Requires read:all or read:reaff.
-  summary: (fullSemester) => request(`/reaffiliations/${fullSemester}/summary`),
+  getReaffiliationsSummary: (fullSemester) => request(`/reaffiliations/${fullSemester}/summary`),
 
   // GET /members?year&sem&page -> PaginatedMembers
   // The one endpoint carrying member names; /reaffiliations returns fact rows only.
   // Requires read:all or read:member.
-  members: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } })
+  members: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } }),
+
+  getCampusDegreePrograms: (campus_id, page = 1) => request(`/campus/${campus_id}/degrees`, { params: { page }}),
+
+  // GET /reaffiliations
+  getReaffiliations: ({ year, sem, campus_id = null, comm_id = null, include_member_data = false, page = 1}) => 
+    request('/reaffiliations', { params: { year, sem, campus_id, comm_id, include_member_data, page } }),
+  deleteReaffiliation: ( id ) => request(`/reaffiliations/reaff/${id}`, { method: 'DELETE' }, )
 }
 
 export const semesterCode = (year, semester) => `${year}${semester}`

@@ -40,7 +40,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    analytics.value = await api.summary(selected.value)
+    analytics.value = await api.getReaffiliationsSummary(selected.value)
   } catch (e) {
     analytics.value = null
     error.value = e.detail
