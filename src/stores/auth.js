@@ -16,6 +16,7 @@ function load() {
   }
 }
 
+// Decodes token into JSON-appropriate string
 function claims(token) {
   const [, payload] = token.split('.')
   return JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')))
@@ -28,6 +29,8 @@ export const auth = {
   isAuthenticated: computed(() => !!state.session && state.session.exp * 1000 > Date.now()),
   username: computed(() => state.session?.username ?? ''),
   permissions: computed(() => state.session?.permissions ?? []),
+  member: computed(() => state?.session?.member ?? null),
+  isLinkedMember: computed(() => !!state?.session?.hasMemberId),
 
   can(...needed) {
     const held = state.session?.permissions ?? []
@@ -40,6 +43,8 @@ export const auth = {
     state.session = {
       token: res.access_token,
       username: res.user?.username ?? payload.sub,
+      member: res?.user?.member ?? null,
+      hasMemberId: res?.user?.has_member_id ?? false,
       permissions: payload.permissions ?? [],
       exp: payload.exp
     }
