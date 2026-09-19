@@ -61,6 +61,14 @@ export const auth = {
     }
   },
 
+  updateMember(updatedMember) {
+    if (!state.session) return
+    state.session.member = updatedMember
+      ? { ...(state.session.member ?? {}), ...updatedMember }
+      : state.session.member
+    sessionStorage.setItem(KEY, JSON.stringify(state.session))
+  },
+
   clear() {
     state.session = null
     sessionStorage.removeItem(KEY)
