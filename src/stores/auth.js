@@ -31,6 +31,7 @@ export const auth = {
   permissions: computed(() => state.session?.permissions ?? []),
   member: computed(() => state?.session?.member ?? null),
   isLinkedMember: computed(() => !!state?.session?.hasMemberId),
+  isAdmin: computed(() => (state.session?.permissions ?? []).includes('update:all')),
 
   can(...needed) {
     const held = state.session?.permissions ?? []

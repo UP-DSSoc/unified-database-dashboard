@@ -26,15 +26,13 @@ async function signOut() {
       <nav>
         <RouterLink :to="{ name: 'summary' }">Semester summary</RouterLink>
         <RouterLink :to="{ name: 'reaffiliations' }">Reaffiliations</RouterLink>
+        
       </nav>
 
       <div class="account">
         <div class="account-card">
           <p class="who">{{ auth.username.value }}</p>
-          <template v-if="auth.isLinkedMember.value">
-            <RouterLink :to="{ name: 'profile' }" class="profile-link">View profile →</RouterLink>
-          </template>
-          <p v-else class="unlinked">Not linked to member data</p>
+          <RouterLink :to="{ name: 'profile' }" class="profile-link">View profile →</RouterLink>
         </div>
         <button class="btn btn-quiet sign-out" :disabled="signingOut" @click="signOut">
           {{ signingOut ? 'Signing out…' : 'Sign out' }}

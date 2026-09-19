@@ -20,7 +20,7 @@ const routes = [
     path: "/profile",
     name: "profile",
     component: () => import('./views/ProfileView.vue'),
-    meta: { requiresAuth: true, requiresMember: true }
+    meta: { requiresAuth: true }
   },
   { path: '/:pathMatch(.*)*', redirect: '/summary' }
 ]

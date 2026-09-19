@@ -4,6 +4,11 @@ import { auth } from '@/stores/auth'
 import { api } from '@/api/client'
 
 const member = computed(() => auth.member.value)
+const isLinked = computed(() => auth.isLinkedMember.value)
+const isAdmin = computed(() => auth.isAdmin.value)
+
+// NOTE: link-member modal not implemented yet
+function openLinkModal() {}
 
 function formatKey(key) {
   return key
@@ -98,7 +103,23 @@ async function submitEdit() {
 </script>
 
 <template>
-  <section class="panel member-section">
+  <section v-if="!isLinked" class="panel member-section">
+    <div class="section-header">
+      <div>
+        <h2>Member data</h2>
+        <p class="panel-note">This account is not linked to a member record.</p>
+      </div>
+    </div>
+    <div v-if="isAdmin" class="link-prompt">
+      <p>As an administrator, you can link this account to a member record yourself.</p>
+      <button class="btn" @click="openLinkModal">Link member record</button>
+    </div>
+    <p v-else class="muted">
+      Ask an administrator to link your account to your member record to view and edit your member data.
+    </p>
+  </section>
+
+  <section v-else class="panel member-section">
     <div class="section-header">
       <div>
         <h2>Member data</h2>
@@ -188,6 +209,20 @@ async function submitEdit() {
 .btn-edit {
   flex-shrink: 0;
   margin-top: 0.15rem;
+}
+
+.link-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: 0.5rem;
+}
+
+.link-prompt p {
+  margin: 0;
+  font-size: 0.9rem;
 }
 
 .fields {
