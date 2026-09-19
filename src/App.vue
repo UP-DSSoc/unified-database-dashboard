@@ -26,7 +26,21 @@ async function signOut() {
       <nav>
         <RouterLink :to="{ name: 'summary' }">Semester summary</RouterLink>
         <RouterLink :to="{ name: 'reaffiliations' }">Reaffiliations</RouterLink>
-        
+
+        <div class="nav-section">
+          <p class="nav-heading">Admin</p>
+          <span class="nav-disabled" aria-disabled="true">Dashboard</span>
+          <span class="nav-disabled">Duplicates</span>
+        </div>
+
+        <div class="nav-section">
+          <p class="nav-heading">Manage</p>
+          <span class="nav-disabled" aria-disabled="true">Committees</span>
+          <span class="nav-disabled" aria-disabled="true">Degree Programs</span>
+          <span class="nav-disabled">Reaffiliations</span>
+          <span class="nav-disabled">Members</span>
+          <span class="nav-disabled">Users</span>
+        </div>
       </nav>
 
       <div class="account">
@@ -115,6 +129,32 @@ nav a.router-link-active {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.nav-section {
+  display: flex;
+  flex-direction: column;
+  margin-top: auto;
+  padding-top: 0.9rem;
+  border-top: 1px solid #2f3433;
+}
+
+.nav-heading {
+  margin: 0 0 0.35rem;
+  padding: 0 0.6rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7d8480;
+}
+
+.nav-disabled {
+  color: #5a615e;
+  padding: 0.55rem 0.6rem;
+  border-left: 2px solid transparent;
+  font-size: 0.93rem;
+  cursor: not-allowed;
+  user-select: none;
+}
+
 .account {
   border-top: 1px solid #2f3433;
   padding-top: 0.9rem;
@@ -196,6 +236,20 @@ nav a.router-link-active {
   nav a.router-link-active {
     border-left: 0;
     border-bottom-color: var(--maroon);
+  }
+  .nav-section {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+    border-top: 0;
+  }
+  .nav-heading {
+    margin: 0;
+  }
+  .nav-disabled {
+    border-left: 0;
   }
   .account {
     border-top: 0;
