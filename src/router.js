@@ -22,6 +22,22 @@ const routes = [
     component: () => import('./views/ProfileView.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: "/manage",
+    children: [
+      {
+        path: "committees",
+        name: "manage-committees",
+        component: () => import('./views/manage/CommitteeView.vue')
+      },
+      {
+        path: "degrees",
+        name: "manage-degrees",
+        component: () => import('./views/manage/DegreeProgramView.vue')
+      }
+    ],
+    meta: { requiresAuth: true, isAdmin: true }
+  },
   { path: '/:pathMatch(.*)*', redirect: '/summary' }
 ]
 
@@ -30,6 +46,9 @@ export const router = createRouter({ history: createWebHistory(), routes })
 router.beforeEach((to) => {
   if (to.meta.requiresAuth && !auth.isAuthenticated.value) {
     return { name: 'login', query: to.fullPath === '/summary' ? {} : { next: to.fullPath } }
+  }
+  if (to.meta.requiresMember && !auth.isLinkedMember.value) {
+    return { name: 'summary' }
   }
   if (to.name === 'login' && auth.isAuthenticated.value) return { name: 'summary' }
 })

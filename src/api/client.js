@@ -84,6 +84,10 @@ export const api = {
   // GET /meta/semesters -> { data: [{ year, semester }], total }
   semesters: () => request('/meta/semesters', { auth: false }),
 
+  getCommittees: () => request('/committees'),
+
+  getDegrees: ({ page = 1 }) => request('/degrees', { params: { page }}), // NOTE: this will be updated when the sort is handled
+
   // GET /reaffiliations/{YYYY[AB]}/summary -> ReaffiliationAnalytics
   // Requires read:all or read:reaff.
   getReaffiliationsSummary: (fullSemester) => request(`/reaffiliations/${fullSemester}/summary`),
