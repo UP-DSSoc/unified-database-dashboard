@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api/client'
 import { auth } from '@/stores/auth'
+import DataTable from '@/components/table/DataTable.vue'
 
 const result = ref(null)
 const loading = ref(true)
@@ -47,6 +48,32 @@ async function deleteCommittee(committee) {
 
 const categoryNum = (c) => String(c?.category_num ?? '').padStart(2, '0')
 
+const columns = [
+  { key: 'category_num', label: 'Category', cellClass: 'figure', format: (_v, c) => categoryNum(c) },
+  { key: '_id', label: 'Initials', cellClass: 'figure' },
+  { key: 'name', label: 'Name' },
+]
+
+const rowActions = computed(() => [
+  {
+    key: 'edit',
+    label: 'Edit',
+    icon: 'edit',
+    show: canEdit.value,
+    ariaLabel: (c) => `Edit ${c.name}`,
+    onClick: editCommittee,
+  },
+  {
+    key: 'delete',
+    label: 'Delete',
+    icon: 'delete',
+    danger: true,
+    show: canDelete.value,
+    ariaLabel: (c) => `Delete ${c.name}`,
+    onClick: deleteCommittee,
+  },
+])
+
 const rows = computed(() => {
   const list = (result.value?.data ?? [])
     .filter((c) => !c.is_deleted)
@@ -85,52 +112,14 @@ const rows = computed(() => {
       <span class="figure">{{ rows.length }}</span> committees<span v-if="search"> match</span>
     </p>
 
-    <div class="table-wrap panel">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Category</th>
-            <th scope="col">Initials</th>
-            <th scope="col">Name</th>
-            <th v-if="hasAnyAction" scope="col" class="actions-th">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="c in rows" :key="c._id">
-            <td class="figure">{{ categoryNum(c) }}</td>
-            <td class="figure">{{ c._id }}</td>
-            <td>{{ c.name }}</td>
-            <td v-if="hasAnyAction" class="actions-cell">
-              <div class="row-actions">
-                <button
-                  v-if="canEdit"
-                  class="row-btn"
-                  :aria-label="`Edit ${c.name}`"
-                  @click="editCommittee(c)"
-                >
-                  <span class="material-symbols-outlined">edit</span>
-                  Edit
-                </button>
-                <button
-                  v-if="canDelete"
-                  class="row-btn danger"
-                  :aria-label="`Delete ${c.name}`"
-                  @click="deleteCommittee(c)"
-                >
-                  <span class="material-symbols-outlined">delete</span>
-                  Delete
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!rows.length">
-            <td :colspan="hasAnyAction ? 4 : 3" class="empty">
-              {{ search ? 'No committee matches that search.' : 'No committees recorded yet.' }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      :columns="columns"
+      :rows="rows"
+      row-key="_id"
+      :actions="rowActions"
+      :show-actions="hasAnyAction"
+      :empty-text="search ? 'No committee matches that search.' : 'No committees recorded yet.'"
+    />
   </template>
 </template>
 
@@ -170,100 +159,5 @@ const rows = computed(() => {
 .count .figure {
   color: var(--ink);
   font-size: 1rem;
-}
-
-.table-wrap {
-  padding: 0;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-th {
-  text-align: left;
-  font-weight: 500;
-  font-size: 0.78rem;
-  color: var(--slate);
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  white-space: nowrap;
-}
-
-td {
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid #eef0ec;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-td.figure {
-  font-size: 0.83rem;
-  color: var(--slate);
-}
-
-.empty {
-  color: var(--slate);
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
-/* ── Actions column ── */
-
-.actions-th {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-.actions-cell {
-  text-align: right;
-  padding: 0.35rem 0.75rem;
-  white-space: nowrap;
-}
-
-.row-actions {
-  display: inline-flex;
-  gap: 0.4rem;
-}
-
-.row-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.6rem;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  color: var(--ink);
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-.row-btn:hover {
-  background: #fff;
-  border-color: var(--slate);
-}
-
-.row-btn .material-symbols-outlined {
-  font-size: 1rem;
-  color: var(--slate);
-}
-
-.row-btn.danger {
-  color: #c0392b;
-}
-
-.row-btn.danger .material-symbols-outlined {
-  color: #c0392b;
-}
-
-.row-btn.danger:hover {
-  border-color: #c0392b;
 }
 </style>

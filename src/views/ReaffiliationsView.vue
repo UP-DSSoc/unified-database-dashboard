@@ -1,8 +1,11 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api, latestSemester, semesterCode } from '../api/client'
 import { auth } from '../stores/auth'
 import SingleReaffiliation from '../components/reaffiliation/SingleReaffiliation.vue'
+import DataTable from '../components/table/DataTable.vue'
+import RowActionMenu from '../components/table/RowActionMenu.vue'
+import TablePager from '../components/table/TablePager.vue'
 
 const semesters = ref([])
 const selected = ref(null)
@@ -20,34 +23,9 @@ const hasAnyAction = computed(
   () => canRead.value || canEditMember.value || canEditReaff.value || canDelete.value
 )
 
-const openMenu = ref(null)
-const editExpanded = ref(false)
 const viewRecord = ref(null)
-const menuPos = ref({ top: 0, left: 0 })
-
-function toggleMenu(id, event) {
-  if (openMenu.value === id) {
-    openMenu.value = null
-    editExpanded.value = false
-  } else {
-    openMenu.value = id
-    editExpanded.value = false
-    const rect = event.currentTarget.getBoundingClientRect()
-    menuPos.value = { top: rect.bottom + 4, left: rect.right }
-  }
-}
-
-function closeMenu() {
-  openMenu.value = null
-  editExpanded.value = false
-}
-
-function onDocClick() {
-  if (openMenu.value !== null) closeMenu()
-}
 
 onMounted(async () => {
-  document.addEventListener('click', onDocClick)
   try {
     const meta = await api.semesters()
     semesters.value = [...meta.data].sort(
@@ -58,10 +36,6 @@ onMounted(async () => {
   } catch {
     selected.value = '2425B'
   }
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', onDocClick)
 })
 
 watch(selected, () => {
@@ -86,7 +60,6 @@ async function load() {
       include_member_data: true,
       page: page.value,
     })
-    console.warn(result?.value)
   } catch (e) {
     result.value = null
     error.value = e.detail
@@ -95,12 +68,10 @@ async function load() {
   }
 }
 
-async function deleteReaff(id) {
-  console.warn("ID selected", id)
+async function deleteReaff(record) {
   if (!window.confirm('Delete this reaffiliation record? This cannot be undone.')) return
-  closeMenu()
   try {
-    await api.deleteReaffiliation(id)
+    await api.deleteReaffiliation(fetchId(record))
     await load()
   } catch (e) {
     error.value = e?.detail || 'Failed to delete reaffiliation.'
@@ -109,17 +80,53 @@ async function deleteReaff(id) {
 
 const fetchId = (m) => m?.id ?? m?._id
 
-const fullName = (m) =>
-  [m.first_name, m.middle_name, m.last_name, m.suffix].filter(Boolean).join(' ')
-
 const lNFnName = (m) => `${m?.last_name}, ${m?.first_name} ${m?.middle_name} ${m?.suffix}`
 
-// const sortMembers = (a, b) => -1
+const columns = [
+  { key: 'name', label: 'Name', format: (_v, m) => lNFnName(m?.member) },
+  { key: 'dssoc_id', label: 'DSSOC ID', cellClass: 'figure' },
+  {
+    key: 'designation',
+    label: 'Designation',
+    cellClass: (m) => ['figure', `desig-${m?.designation?.toLowerCase()}`],
+  },
+  { key: 'member.student_number', label: 'Student Number', cellClass: 'figure' },
+  { key: 'member.up_mail', label: 'UP Mail' },
+]
+
+const menuItems = computed(() => [
+  {
+    key: 'view',
+    label: 'View',
+    icon: 'visibility',
+    show: canRead.value,
+    onClick: (m) => (viewRecord.value = m),
+  },
+  {
+    key: 'edit',
+    label: 'Edit',
+    icon: 'more_horiz',
+    show: canEditMember.value || canEditReaff.value,
+    children: [
+      // TODO: open the edit-member modal once it exists.
+      { key: 'edit-member', label: 'Edit Member', show: canEditMember.value },
+      // TODO: open the edit-reaffiliation modal once it exists.
+      { key: 'edit-reaff', label: 'Edit Reaffiliation', show: canEditReaff.value },
+    ],
+  },
+  {
+    key: 'delete',
+    label: 'Delete',
+    icon: 'delete',
+    danger: true,
+    show: canDelete.value,
+    onClick: deleteReaff,
+  },
+])
 
 // Filters the loaded page. Server-side name search is not exposed yet.
 const rows = computed(() => {
   const list = result?.value?.data ?? []
-  console.warn("list", list)
   const q = search.value.trim().toLowerCase()
   if (!q) return list
   return list.filter((r) =>
@@ -127,7 +134,6 @@ const rows = computed(() => {
       .filter(Boolean)
       .some((v) => String(v).toLowerCase().includes(q))
   )
-  // ).sort(sortMembers(a?.member?.last_name, b?.member?.last_name))
 })
 
 const firstOnPage = computed(() =>
@@ -173,96 +179,28 @@ const lastOnPage = computed(() =>
       >
     </p>
 
-    <div class="table-wrap panel">
-      <table>
-        <thead>
-          <tr>
-            <!-- Name: LN, FN -->
-            <th scope="col">Name</th>
-            <th scope="col">DSSOC ID</th>
-            <th scope="col">Designation</th>
-            <th scope="col">Student Number</th>
-            <th scope="col">UP Mail</th>
-            <th v-if="hasAnyAction" scope="col" class="actions-th">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in rows" :key="m?.dssoc_id">
-            <td>{{ lNFnName(m?.member) }}</td>
-            <td class="figure">{{ m?.dssoc_id }}</td>
-            <td class="figure" :class="`desig-${m?.designation?.toLowerCase()}`">{{ m?.designation }}</td>
-            <td class="figure">{{ m?.member?.student_number || '—' }}</td>
-            <td>{{ m?.member?.up_mail || '—' }}</td>
-            <td v-if="hasAnyAction" class="actions-cell">
-              <div class="menu-wrap" @click.stop>
-                <button
-                  class="icon-btn"
-                  :class="{ active: openMenu === m.dssoc_id }"
-                  :aria-label="`Actions for ${lNFnName(m.member)}`"
-                  :aria-expanded="String(openMenu === m.dssoc_id)"
-                  @click="toggleMenu(m.dssoc_id, $event)"
-                >
-                  <span class="material-symbols-outlined">more_horiz</span>
-                </button>
-                <Teleport to="body">
-                  <div
-                    v-if="openMenu === m.dssoc_id"
-                    class="action-menu"
-                    :style="{ top: menuPos.top + 'px', left: menuPos.left + 'px' }"
-                    @click.stop
-                  >
-                    <button v-if="canRead" class="action-btn" @click="viewRecord = m; closeMenu()">
-                      <span class="material-symbols-outlined">visibility</span>
-                      View
-                    </button>
+    <DataTable
+      :columns="columns"
+      :rows="rows"
+      row-key="dssoc_id"
+      :show-actions="hasAnyAction"
+      compact-actions
+      :empty-text="
+        search
+          ? 'No one on this page matches that search. Try another page or clear the search.'
+          : 'No reaffiliations recorded for this semester yet.'
+      "
+    >
+      <template #actions="{ row }">
+        <RowActionMenu
+          :items="menuItems"
+          :row="row"
+          :aria-label="`Actions for ${lNFnName(row.member)}`"
+        />
+      </template>
+    </DataTable>
 
-                    <div v-if="canEditMember || canEditReaff">
-                      <button class="action-btn" @click="editExpanded = !editExpanded">
-                        <span class="material-symbols-outlined">more_horiz</span>
-                        Edit
-                        <span class="material-symbols-outlined caret">{{
-                          editExpanded ? 'expand_less' : 'expand_more'
-                        }}</span>
-                      </button>
-                      <div v-if="editExpanded" class="sub-menu">
-                        <button v-if="canEditMember" class="action-btn sub-btn" @click="closeMenu">
-                          Edit Member
-                        </button>
-                        <button v-if="canEditReaff" class="action-btn sub-btn" @click="closeMenu">
-                          Edit Reaffiliation
-                        </button>
-                      </div>
-                    </div>
-
-                    <button v-if="canDelete" class="action-btn danger" @click="deleteReaff(fetchId(m))">
-                      <span class="material-symbols-outlined">delete</span>
-                      Delete
-                    </button>
-                  </div>
-                </Teleport>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!rows?.length">
-            <td :colspan="hasAnyAction ? 6 : 5" class="empty">
-              {{
-                search
-                  ? 'No one on this page matches that search. Try another page or clear the search.'
-                  : 'No reaffiliations recorded for this semester yet.'
-              }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <nav v-if="result.total_pages > 1" class="pager">
-      <button class="btn btn-quiet" :disabled="page <= 1" @click="page--">Previous</button>
-      <span class="figure">Page {{ result.page }} of {{ result.total_pages }}</span>
-      <button class="btn btn-quiet" :disabled="page >= result.total_pages" @click="page++">
-        Next
-      </button>
-    </nav>
+    <TablePager v-model:page="page" :total-pages="result.total_pages" />
   </template>
 
   <SingleReaffiliation
@@ -310,172 +248,14 @@ const lastOnPage = computed(() =>
   font-size: 1rem;
 }
 
-.table-wrap {
-  padding: 0;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-th {
-  text-align: left;
-  font-weight: 500;
-  font-size: 0.78rem;
-  color: var(--slate);
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  white-space: nowrap;
-}
-
-td {
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid #eef0ec;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-td.figure {
-  font-size: 0.83rem;
-  color: var(--slate);
-}
-
-.desig-associate {
+/* Designation chips live on cells DataTable renders, so they need :deep(). */
+:deep(.desig-associate) {
   background-color: #af83c8;
   color: #fff !important;
 }
 
-.desig-fellow {
+:deep(.desig-fellow) {
   background-color: #9729d5;
   color: #fff !important;
-}
-
-.empty {
-  color: var(--slate);
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  font-size: 0.85rem;
-  color: var(--slate);
-}
-
-/* ── Actions column ── */
-
-.actions-th {
-  text-align: right;
-  width: 3rem;
-  padding-right: 0.75rem;
-}
-
-.actions-cell {
-  width: 3rem;
-  text-align: right;
-  padding: 0.3rem 0.5rem;
-}
-
-.menu-wrap {
-  position: relative;
-  display: inline-block;
-}
-
-.icon-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.2rem 0.3rem;
-  border-radius: 4px;
-  color: var(--slate);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.12s, color 0.12s;
-  line-height: 1;
-}
-
-.icon-btn:hover,
-.icon-btn.active {
-  background: var(--rule, #e8eae6);
-  color: var(--ink);
-}
-
-.icon-btn .material-symbols-outlined {
-  font-size: 1.25rem;
-}
-
-.action-menu {
-  position: fixed;
-  transform: translateX(-100%);
-  background: #fff;
-  border: 1px solid var(--rule, #e8eae6);
-  border-radius: 6px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
-  min-width: 11rem;
-  z-index: 9999;
-  overflow: hidden;
-}
-
-.action-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  background: none;
-  border: none;
-  text-align: left;
-  cursor: pointer;
-  font-size: 0.85rem;
-  color: var(--ink);
-  transition: background 0.1s;
-  white-space: nowrap;
-}
-
-.action-btn:hover {
-  background: var(--rule, #f0f2ee);
-}
-
-.action-btn .material-symbols-outlined {
-  font-size: 1rem;
-  color: var(--slate);
-  flex-shrink: 0;
-}
-
-.action-btn.danger {
-  color: #c0392b;
-}
-
-.action-btn.danger .material-symbols-outlined {
-  color: #c0392b;
-}
-
-.caret {
-  margin-left: auto;
-  font-size: 1rem !important;
-  color: var(--slate) !important;
-}
-
-.sub-menu {
-  border-top: 1px solid var(--rule, #e8eae6);
-}
-
-.sub-btn {
-  padding-left: 2.25rem;
-  font-size: 0.82rem;
-  color: var(--slate);
-}
-
-.sub-btn:hover {
-  color: var(--ink);
 }
 </style>

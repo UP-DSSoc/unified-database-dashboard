@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/api/client'
 import { auth } from '@/stores/auth'
+import DataTable from '@/components/table/DataTable.vue'
+import TablePager from '@/components/table/TablePager.vue'
 
 const page = ref(1)
 const result = ref(null)
@@ -48,6 +50,32 @@ async function deleteDegree(degree) {
 }
 
 const degreeId = (d) => d?.id ?? d?._id ?? d?.degree_id
+
+const columns = [
+  { key: 'course_name', label: 'Course' },
+  { key: 'campus_id', label: 'Campus', cellClass: 'figure' },
+  { key: 'college', label: 'College', cellClass: 'figure' },
+]
+
+const rowActions = computed(() => [
+  {
+    key: 'edit',
+    label: 'Edit',
+    icon: 'edit',
+    show: canEdit.value,
+    ariaLabel: (d) => `Edit ${d.course_name}`,
+    onClick: editDegree,
+  },
+  {
+    key: 'delete',
+    label: 'Delete',
+    icon: 'delete',
+    danger: true,
+    show: canDelete.value,
+    ariaLabel: (d) => `Delete ${d.course_name}`,
+    onClick: deleteDegree,
+  },
+])
 
 // Filters the loaded page. Server-side search is not exposed yet.
 const rows = computed(() => {
@@ -97,64 +125,20 @@ const lastOnPage = computed(() =>
       >
     </p>
 
-    <div class="table-wrap panel">
-      <table>
-        <thead>
-          <tr>
-            <th scope="col">Course</th>
-            <th scope="col">Campus</th>
-            <th scope="col">College</th>
-            <th v-if="hasAnyAction" scope="col" class="actions-th">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="d in rows" :key="degreeId(d)">
-            <td>{{ d.course_name }}</td>
-            <td class="figure">{{ d.campus_id }}</td>
-            <td class="figure">{{ d.college || '—' }}</td>
-            <td v-if="hasAnyAction" class="actions-cell">
-              <div class="row-actions">
-                <button
-                  v-if="canEdit"
-                  class="row-btn"
-                  :aria-label="`Edit ${d.course_name}`"
-                  @click="editDegree(d)"
-                >
-                  <span class="material-symbols-outlined">edit</span>
-                  Edit
-                </button>
-                <button
-                  v-if="canDelete"
-                  class="row-btn danger"
-                  :aria-label="`Delete ${d.course_name}`"
-                  @click="deleteDegree(d)"
-                >
-                  <span class="material-symbols-outlined">delete</span>
-                  Delete
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!rows.length">
-            <td :colspan="hasAnyAction ? 4 : 3" class="empty">
-              {{
-                search
-                  ? 'No degree program on this page matches that search. Try another page or clear the search.'
-                  : 'No degree programs recorded yet.'
-              }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      :columns="columns"
+      :rows="rows"
+      :row-key="degreeId"
+      :actions="rowActions"
+      :show-actions="hasAnyAction"
+      :empty-text="
+        search
+          ? 'No degree program on this page matches that search. Try another page or clear the search.'
+          : 'No degree programs recorded yet.'
+      "
+    />
 
-    <nav v-if="result.total_pages > 1" class="pager">
-      <button class="btn btn-quiet" :disabled="page <= 1" @click="page--">Previous</button>
-      <span class="figure">Page {{ result.page }} of {{ result.total_pages }}</span>
-      <button class="btn btn-quiet" :disabled="page >= result.total_pages" @click="page++">
-        Next
-      </button>
-    </nav>
+    <TablePager v-model:page="page" :total-pages="result.total_pages" />
   </template>
 </template>
 
@@ -194,109 +178,5 @@ const lastOnPage = computed(() =>
 .count .figure {
   color: var(--ink);
   font-size: 1rem;
-}
-
-.table-wrap {
-  padding: 0;
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-
-th {
-  text-align: left;
-  font-weight: 500;
-  font-size: 0.78rem;
-  color: var(--slate);
-  padding: 0.7rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  white-space: nowrap;
-}
-
-td {
-  padding: 0.6rem 1rem;
-  border-bottom: 1px solid #eef0ec;
-}
-
-tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-td.figure {
-  font-size: 0.83rem;
-  color: var(--slate);
-}
-
-.empty {
-  color: var(--slate);
-  padding: 2rem 1rem;
-  text-align: center;
-}
-
-.pager {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
-  font-size: 0.85rem;
-  color: var(--slate);
-}
-
-/* ── Actions column ── */
-
-.actions-th {
-  text-align: right;
-  padding-right: 1rem;
-}
-
-.actions-cell {
-  text-align: right;
-  padding: 0.35rem 0.75rem;
-  white-space: nowrap;
-}
-
-.row-actions {
-  display: inline-flex;
-  gap: 0.4rem;
-}
-
-.row-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.3rem 0.6rem;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  color: var(--ink);
-  font-size: 0.82rem;
-  cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-}
-
-.row-btn:hover {
-  background: #fff;
-  border-color: var(--slate);
-}
-
-.row-btn .material-symbols-outlined {
-  font-size: 1rem;
-  color: var(--slate);
-}
-
-.row-btn.danger {
-  color: #c0392b;
-}
-
-.row-btn.danger .material-symbols-outlined {
-  color: #c0392b;
-}
-
-.row-btn.danger:hover {
-  border-color: #c0392b;
 }
 </style>
