@@ -27,13 +27,15 @@ async function signOut() {
         <RouterLink :to="{ name: 'summary' }">Semester summary</RouterLink>
         <RouterLink :to="{ name: 'reaffiliations' }">Reaffiliations</RouterLink>
 
-        <div class="nav-section">
+        <div class="nav-section" :hidden="!auth?.isAdmin?.value">
           <p class="nav-heading">Admin</p>
           <span class="nav-disabled" aria-disabled="true">Dashboard</span>
-          <span class="nav-disabled">Duplicates</span>
+          <!-- NOTE: ???? -->
+          <!-- Might be good to have an individual table for activity as well hehe -->
+          <span class="nav-disabled">Activity</span>
         </div>
 
-        <div class="nav-section">
+        <div class="nav-section" :hidden="!auth?.isAdmin?.value">
           <p class="nav-heading">Manage</p>
           <RouterLink :to="{ name: 'manage-committees' }">Committees</RouterLink>
           <span class="nav-disabled" aria-disabled="true">Adhoc Committees</span>
@@ -136,6 +138,10 @@ nav a.router-link-active {
   margin-top: auto;
   padding-top: 0.9rem;
   border-top: 1px solid #2f3433;
+}
+
+.nav-section[hidden] {
+  display: none;
 }
 
 .nav-heading {
