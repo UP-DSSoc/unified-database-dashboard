@@ -85,8 +85,17 @@ export const api = {
   semesters: () => request('/meta/semesters', { auth: false }),
 
   getCommittees: () => request('/committees'),
+  deleteCommittee: (comm_id, subcommittee) => request(`/committees/${comm_id}/${subcommittee}`, { method: 'DELETE' }),
 
   getDegrees: ({ page = 1 }) => request('/degrees', { params: { page }}), // NOTE: this will be updated when the sort is handled
+  // POST /campus/{campus_id}/degrees -> CampusDegrees
+  // Requires create:all or create:campus. `college` and `college_long` are
+  // nullable, but the body must carry all four keys.
+  addDegree: ({ campus_id, course_name, college = null, college_long = null }) =>
+    request(`/campus/${campus_id}/degrees`, {
+      method: 'POST',
+      body: { campus_id, course_name, college, college_long },
+    }),
 
   // GET /reaffiliations/{YYYY[AB]}/summary -> ReaffiliationAnalytics
   // Requires read:all or read:reaff.
@@ -95,9 +104,12 @@ export const api = {
   // GET /members?year&sem&page -> PaginatedMembers
   // The one endpoint carrying member names; /reaffiliations returns fact rows only.
   // Requires read:all or read:member.
-  members: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } }),
+  getMembers: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } }),
   getSingleMemberHistory: ({ dssoc_id }) => request(`/members/history/${dssoc_id}`),
   editMember: (dssoc_id, member) => request(`/members/${dssoc_id}`, { method: 'PATCH', body: member }),
+  deleteMember: (dssoc_id) => request(`/members/${dssoc_id}`, { method: "DELETE" }),
+
+  getCampuses: () => request('/campus'),
 
   getCampusDegreePrograms: (campus_id, page = 1) => request(`/campus/${campus_id}/degrees`, { params: { page }}),
 

@@ -4,12 +4,24 @@ import { api } from '@/api/client'
 import { auth } from '@/stores/auth'
 import DataTable from '@/components/table/DataTable.vue'
 import TablePager from '@/components/table/TablePager.vue'
+import AddModal from '@/components/generic/AddModal.vue'
 
 const page = ref(1)
 const result = ref(null)
 const loading = ref(true)
 const error = ref('')
 const search = ref('')
+
+// Add-degree modal, plus the state AddModal renders while the create runs.
+const adding = ref(false)
+const creating = ref(false)
+const createError = ref('')
+
+// Campuses back the campus dropdown. Loaded on first open and kept after, so
+// reopening the modal does not refetch.
+const campuses = ref([])
+const campusesLoading = ref(false)
+const campusesError = ref('')
 
 const canRead = computed(() => auth.can('read:all'))
 const canCreate = computed(() => auth.can('create:all'))
@@ -38,8 +50,47 @@ async function load() {
   }
 }
 
-// TODO: open the add-degree modal once it exists.
-function addDegree() {}
+// TODO: edit campus list
+async function loadCampuses() {
+  if (campuses.value.length || campusesLoading.value) return
+  campusesLoading.value = true
+  campusesError.value = ''
+  try {
+    const res = await api.getCampuses()
+    campuses.value = res?.data ?? []
+    console.warn("Value of campus", campuses?.value)
+  } catch (e) {
+    campusesError.value = e?.detail || 'Could not load campuses.'
+  } finally {
+    campusesLoading.value = false
+  }
+}
+
+function addDegree() {
+  createError.value = ''
+  adding.value = true
+  loadCampuses()
+}
+
+function cancelAdd() {
+  adding.value = false
+  createError.value = ''
+}
+
+async function createDegree(values) {
+  creating.value = true
+  createError.value = ''
+  try {
+    await api.addDegree(values)
+    adding.value = false
+    await load()
+  } catch (e) {
+    // Kept in the modal so the typed values survive and can be retried.
+    createError.value = e?.detail || 'Failed to add degree program.'
+  } finally {
+    creating.value = false
+  }
+}
 
 // TODO: open the edit-degree modal once it exists.
 function editDegree(degree) {}
@@ -56,6 +107,48 @@ const columns = [
   { key: 'campus_id', label: 'Campus', cellClass: 'figure' },
   { key: 'college', label: 'College', cellClass: 'figure' },
 ]
+
+// The campus identifier is the document key; fall back in case the endpoint
+// names it differently.
+const campusId = (c) => c?.campus_id
+
+// POST /campus/{campus_id}/degrees takes all four keys; college and
+// college_long accept null, so they are left optional here.
+const addFields = computed(() => [
+  {
+    key: 'campus_id',
+    label: 'Campus',
+    type: 'select',
+    required: true,
+    options: campuses.value.map((c) => ({
+      value: campusId(c),
+      label: c.campus_name ? `${c.campus_name} (${c?._id ?? c?.id})` : campusId(c),
+    })),
+    optionsLoading: campusesLoading.value,
+    hint: campusesError.value,
+  },
+  {
+    key: 'course_name',
+    label: 'Course name',
+    type: 'string',
+    required: true,
+    placeholder: 'Computer Science',
+  },
+  {
+    key: 'college',
+    label: 'College',
+    type: 'string',
+    placeholder: 'ENG',
+    hint: 'College abbreviation. Optional.',
+  },
+  {
+    key: 'college_long',
+    label: 'College (full name)',
+    type: 'string',
+    placeholder: 'College of Engineering',
+    hint: 'Optional.',
+  },
+])
 
 const rowActions = computed(() => [
   {
@@ -140,6 +233,18 @@ const lastOnPage = computed(() =>
 
     <TablePager v-model:page="page" :total-pages="result.total_pages" />
   </template>
+
+  <AddModal
+    v-if="adding"
+    title="Add degree program"
+    description="Records a degree program under a campus."
+    submit-label="Add degree program"
+    :fields="addFields"
+    :busy="creating"
+    :error="createError"
+    @close="cancelAdd"
+    @submit="createDegree"
+  />
 </template>
 
 <style scoped>

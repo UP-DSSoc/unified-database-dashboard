@@ -1,11 +1,10 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { api, latestSemester, semesterCode } from '../api/client'
-import { auth } from '../stores/auth'
-import SingleReaffiliation from '../components/reaffiliation/SingleReaffiliation.vue'
-import DataTable from '../components/table/DataTable.vue'
-import RowActionMenu from '../components/table/RowActionMenu.vue'
-import TablePager from '../components/table/TablePager.vue'
+import { api, latestSemester, semesterCode } from '@/api/client'
+import { auth } from '@/stores/auth'
+import DataTable from '@/components/table/DataTable.vue'
+import TablePager from '@/components/table/TablePager.vue'
+import SingleReaffiliation from '@/components/reaffiliation/SingleReaffiliation.vue'
 import DeleteModal from '@/components/generic/DeleteModal.vue'
 
 const semesters = ref([])
@@ -17,17 +16,16 @@ const error = ref('')
 const search = ref('')
 
 const canRead = computed(() => auth.can('read:all', 'read:member'))
-const canEditMember = computed(() => auth.can('update:all', 'update:member'))
-const canEditReaff = computed(() => auth.can('update:all', 'update:reaff'))
-const canDelete = computed(() => auth.can('delete:all', 'delete:reaff'))
-const hasAnyAction = computed(
-  () => canRead.value || canEditMember.value || canEditReaff.value || canDelete.value
-)
-
+const canEdit = computed(() => auth.can('update:all', 'update:member'))
+const canDelete = computed(() => auth.can('delete:all', 'delete:member'))
+const hasAnyAction = computed(() => canRead.value || canEdit.value || canDelete.value)
 const viewRecord = ref(null)
 
-const deleteError = ref(null)
+// The member awaiting delete confirmation, plus the state DeleteModal renders
+// while the request is in flight.
 const deleteTarget = ref(null)
+const deleting = ref(false)
+const deleteError = ref('')
 
 onMounted(async () => {
   try {
@@ -48,6 +46,9 @@ watch(selected, () => {
 })
 watch(page, load)
 
+// NOTE: a special /admin/members endpoint should be constructed
+// wherein data fetched is based on the query WITHOUT including 
+// is_deleted = False
 async function load() {
   if (!selected.value) return
   if (!canRead.value) {
@@ -58,10 +59,9 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    result.value = await api.getReaffiliations({
+    result.value = await api.getMembers({
       year: selected.value.slice(0, 4),
       sem: selected.value.slice(4),
-      include_member_data: true,
       page: page.value,
     })
   } catch (e) {
@@ -72,9 +72,16 @@ async function load() {
   }
 }
 
-function askDeleteReaff(reaff) {
+function viewMember(member) {
+  viewRecord.value = { dssoc_id: member._id, member }
+}
+
+// TODO: open the edit-member modal once it exists; api.editMember is ready.
+function editMember(member) {}
+
+function askDeleteMember(member) {
   deleteError.value = ''
-  deleteTarget.value = reaff
+  deleteTarget.value = member
 }
 
 function cancelDelete() {
@@ -83,66 +90,51 @@ function cancelDelete() {
 }
 
 async function confirmDelete() {
-  const reaff = deleteTarget?.value
-  if (!reaff) return
+  const member = deleteTarget.value
+  if (!member) return
   deleting.value = true
   deleteError.value = ''
   try {
-    await api.deleteReaffiliation(reaff?._id)
+    await api.deleteMember(member._id)
     deleteTarget.value = null
     await load()
   } catch (e) {
-    deleteError.value = e?.detail || "Failed to delete reaffiliation."
+    // Kept in the modal so the member stays on screen and can be retried.
+    deleteError.value = e?.detail || 'Failed to delete member.'
   } finally {
     deleting.value = false
   }
 }
 
-async function deleteReaff(record) {
-  if (!window.confirm('Delete this reaffiliation record? This cannot be undone.')) return
-  try {
-    await api.deleteReaffiliation(fetchId(record))
-    await load()
-  } catch (e) {
-    error.value = e?.detail || 'Failed to delete reaffiliation.'
-  }
-}
-
-const fetchId = (m) => m?.id ?? m?._id
-
-const lNFnName = (m) => `${m?.last_name}, ${m?.first_name} ${m?.middle_name} ${m?.suffix}`
+const fullName = (m) =>
+  [m?.first_name, m?.middle_name, m?.last_name, m?.suffix].filter(Boolean).join(' ') || m?._id
 
 const columns = [
-  { key: 'name', label: 'Name', format: (_v, m) => lNFnName(m?.member) },
-  { key: 'dssoc_id', label: 'DSSOC ID', cellClass: 'figure' },
-  {
-    key: 'designation',
-    label: 'Designation',
-    cellClass: (m) => ['figure', `desig-${m?.designation?.toLowerCase()}`],
-  },
-  { key: 'member.student_number', label: 'Student Number', cellClass: 'figure' },
-  { key: 'member.up_mail', label: 'UP Mail' },
+  { key: '_id', label: 'DSSOC ID', cellClass: 'figure' },
+  { key: 'student_number', label: 'Student Number', cellClass: 'figure' },
+  { key: 'last_name', label: 'Last Name' },
+  { key: 'first_name', label: 'First Name' },
+  { key: 'middle_name', label: 'Middle Name' },
+  { key: 'personal_email', label: 'Personal Email' },
+  { key: 'up_mail', label: 'UP Mail' },
 ]
 
-const menuItems = computed(() => [
+const rowActions = computed(() => [
   {
     key: 'view',
     label: 'View',
     icon: 'visibility',
     show: canRead.value,
-    onClick: (m) => (viewRecord.value = m),
+    ariaLabel: (m) => `View ${fullName(m)}`,
+    onClick: viewMember,
   },
   {
     key: 'edit',
     label: 'Edit',
-    icon: 'more_horiz',
-    show: canEditMember.value || canEditReaff.value,
-    children: [
-      // TODO: open the edit-member modal once it exists.
-      { key: 'edit-member', label: 'Edit Member', show: canEditMember.value },
-      // TODO: open the edit-reaffiliation modal once it exists.
-      { key: 'edit-reaff', label: 'Edit Reaffiliation', show: canEditReaff.value },
-    ],
+    icon: 'edit',
+    show: canEdit.value,
+    ariaLabel: (m) => `Edit ${fullName(m)}`,
+    onClick: editMember,
   },
   {
     key: 'delete',
@@ -150,20 +142,19 @@ const menuItems = computed(() => [
     icon: 'delete',
     danger: true,
     show: canDelete.value,
-    ariaLabel: (m) => `Delete Reaffiliation?`,
-    onClick: askDeleteReaff,
+    ariaLabel: (m) => `Delete ${fullName(m)}`,
+    onClick: askDeleteMember,
   },
 ])
 
-// Filters the loaded page. Server-side name search is not exposed yet.
+// Filters the loaded page. Server-side search is not exposed yet.
 const rows = computed(() => {
-  const list = result?.value?.data ?? []
+  const list = result.value?.data ?? []
   const q = search.value.trim().toLowerCase()
   if (!q) return list
-  return list.filter((r) =>
-    [r?.member.student_number, r?.member.up_mail, r?.member._id]
-      .filter(Boolean)
-      .some((v) => String(v).toLowerCase().includes(q))
+  return list.filter((m) =>
+    [m._id, m.student_number, m.last_name, m.first_name, m.middle_name, m.personal_email, m.up_mail]
+      .some((v) => String(v ?? '').toLowerCase().includes(q))
   )
 })
 
@@ -178,8 +169,8 @@ const lastOnPage = computed(() =>
 <template>
   <header class="head">
     <div>
-      <h1>Reaffiliations</h1>
-      <p class="muted sub">Members who reaffiliated in the selected semester.</p>
+      <h1>Members</h1>
+      <p class="muted sub">Member profiles for the selected semester.</p>
     </div>
     <div class="controls">
       <div>
@@ -193,19 +184,17 @@ const lastOnPage = computed(() =>
       </div>
       <div class="search">
         <label for="q">Find on this page</label>
-        <input id="q" v-model="search" type="search" placeholder="Name, student number, email" />
+        <input id="q" v-model="search" type="search" placeholder="Name, DSSOC ID, student number, email" />
       </div>
     </div>
   </header>
 
   <p v-if="error" class="notice" role="alert">{{ error }}</p>
-  <p v-else-if="loading" class="muted">Loading {{ selected }}…</p>
+  <p v-else-if="loading" class="muted">Loading members…</p>
 
   <template v-else-if="result">
     <p class="count">
-      <span class="figure">{{ result.total }}</span> members reaffiliated in {{ selected }}<span
-        v-if="result.total"
-      >
+      <span class="figure">{{ result.total }}</span> members in {{ selected }}<span v-if="result.total">
         · showing {{ firstOnPage }}–{{ lastOnPage }}</span
       >
     </p>
@@ -213,23 +202,15 @@ const lastOnPage = computed(() =>
     <DataTable
       :columns="columns"
       :rows="rows"
-      row-key="dssoc_id"
+      row-key="_id"
+      :actions="rowActions"
       :show-actions="hasAnyAction"
-      compact-actions
       :empty-text="
         search
           ? 'No one on this page matches that search. Try another page or clear the search.'
-          : 'No reaffiliations recorded for this semester yet.'
+          : 'No members recorded for this semester yet.'
       "
-    >
-      <template #actions="{ row }">
-        <RowActionMenu
-          :items="menuItems"
-          :row="row"
-          :aria-label="`Actions for ${lNFnName(row.member)}`"
-        />
-      </template>
-    </DataTable>
+    />
 
     <TablePager v-model:page="page" :total-pages="result.total_pages" />
   </template>
@@ -242,14 +223,16 @@ const lastOnPage = computed(() =>
 
   <DeleteModal
     v-if="deleteTarget"
-    title="Delete Reaffiliation"
-    confirm-label="Delete reaffiliation"
+    title="Delete member"
+    confirm-label="Delete member"
     :busy="deleting"
     :error="deleteError"
     @close="cancelDelete"
     @confirm="confirmDelete"
   >
-    Delete reaffiliation? This instance will no longer appear and be counted in the public dashboard.
+    Delete <strong>{{ fullName(deleteTarget) }}</strong>
+    (<span class="figure">{{ deleteTarget._id }}</span>)? Their profile and
+    reaffiliation history will no longer appear in the dashboard.
   </DeleteModal>
 </template>
 
@@ -277,7 +260,7 @@ const lastOnPage = computed(() =>
 }
 
 .search {
-  min-width: 15rem;
+  min-width: 18rem;
 }
 
 .count {
@@ -289,16 +272,5 @@ const lastOnPage = computed(() =>
 .count .figure {
   color: var(--ink);
   font-size: 1rem;
-}
-
-/* Designation chips live on cells DataTable renders, so they need :deep(). */
-:deep(.desig-associate) {
-  background-color: #af83c8;
-  color: #fff !important;
-}
-
-:deep(.desig-fellow) {
-  background-color: #9729d5;
-  color: #fff !important;
 }
 </style>

@@ -34,6 +34,11 @@ const routes = [
         path: "degrees",
         name: "manage-degrees",
         component: () => import('./views/manage/DegreeProgramView.vue')
+      },
+      {
+        path: "members",
+        name: "manage-members",
+        component: () => import('./views/manage/MembersView.vue')
       }
     ],
     meta: { requiresAuth: true, isAdmin: true }
