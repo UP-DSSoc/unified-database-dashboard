@@ -5,6 +5,7 @@ import { auth } from '@/stores/auth'
 import DataTable from '@/components/table/DataTable.vue'
 import TablePager from '@/components/table/TablePager.vue'
 import SingleReaffiliation from '@/components/reaffiliation/SingleReaffiliation.vue'
+import AddEditModal from '@/components/generic/AddEditModal.vue'
 import DeleteModal from '@/components/generic/DeleteModal.vue'
 
 const semesters = ref([])
@@ -20,6 +21,10 @@ const canEdit = computed(() => auth.can('update:all', 'update:member'))
 const canDelete = computed(() => auth.can('delete:all', 'delete:member'))
 const hasAnyAction = computed(() => canRead.value || canEdit.value || canDelete.value)
 const viewRecord = ref(null)
+
+const editTarget = ref(null)
+const saving = ref(false)
+const editError = ref('')
 
 // The member awaiting delete confirmation, plus the state DeleteModal renders
 // while the request is in flight.
@@ -76,8 +81,32 @@ function viewMember(member) {
   viewRecord.value = { dssoc_id: member._id, member }
 }
 
-// TODO: open the edit-member modal once it exists; api.editMember is ready.
-function editMember(member) {}
+function editMember(member) {
+  editError.value = ''
+  editTarget.value = member
+}
+
+function cancelEdit() {
+  editTarget.value = null
+  editError.value = ''
+}
+
+async function saveMember(values) {
+  const member = editTarget.value
+  if (!member) return
+  saving.value = true
+  editError.value = ''
+  try {
+    await api.editMember(member._id, values)
+    editTarget.value = null
+    await load()
+  } catch (e) {
+    // Kept in the modal so the edits survive and can be retried.
+    editError.value = e?.detail || 'Failed to save member.'
+  } finally {
+    saving.value = false
+  }
+}
 
 function askDeleteMember(member) {
   deleteError.value = ''
@@ -117,6 +146,52 @@ const columns = [
   { key: 'middle_name', label: 'Middle Name' },
   { key: 'personal_email', label: 'Personal Email' },
   { key: 'up_mail', label: 'UP Mail' },
+]
+
+// NOTE: `social_media` and `user_id` are to be incorporated as separate
+// features
+const memberFields = [
+  {
+    key: 'student_number',
+    label: 'Student number',
+    type: 'string',
+    placeholder: '2020-12345',
+  },
+  { key: 'last_name', label: 'Last name', type: 'string', required: true },
+  { key: 'first_name', label: 'First name', type: 'string', required: true },
+  {
+    key: 'middle_name',
+    label: 'Middle name',
+    type: 'string',
+    hint: 'Middle name or initial. Optional.',
+  },
+  { key: 'suffix', label: 'Suffix', type: 'string', placeholder: 'Jr.' },
+  { key: 'pronouns', label: 'Pronouns', type: 'string', placeholder: 'they/them' },
+  {
+    key: 'birthday',
+    label: 'Birthday',
+    type: 'string',
+    placeholder: '01/01/2000',
+    hint: 'MM/DD/YYYY.',
+  },
+  {
+    key: 'contact_number',
+    label: 'Contact number',
+    type: 'string',
+    placeholder: '0917 123 4567',
+  },
+  {
+    key: 'personal_email',
+    label: 'Personal email',
+    type: 'string',
+    placeholder: 'member@example.com',
+  },
+  {
+    key: 'up_mail',
+    label: 'UP mail',
+    type: 'string',
+    placeholder: 'member@up.edu.ph',
+  },
 ]
 
 const rowActions = computed(() => [
@@ -170,7 +245,7 @@ const lastOnPage = computed(() =>
   <header class="head">
     <div>
       <h1>Members</h1>
-      <p class="muted sub">Member profiles for the selected semester.</p>
+      <p class="muted sub">Members who first joined on this selected semester.</p>
     </div>
     <div class="controls">
       <div>
@@ -219,6 +294,19 @@ const lastOnPage = computed(() =>
     v-if="viewRecord"
     :record="viewRecord"
     @close="viewRecord = null"
+  />
+
+  <AddEditModal
+    v-if="editTarget"
+    title="Edit member"
+    :description="`Updating ${fullName(editTarget)} (${editTarget._id}).`"
+    submit-label="Save member"
+    :fields="memberFields"
+    :values="editTarget"
+    :busy="saving"
+    :error="editError"
+    @close="cancelEdit"
+    @submit="saveMember"
   />
 
   <DeleteModal

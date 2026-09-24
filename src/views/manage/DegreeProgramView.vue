@@ -4,7 +4,8 @@ import { api } from '@/api/client'
 import { auth } from '@/stores/auth'
 import DataTable from '@/components/table/DataTable.vue'
 import TablePager from '@/components/table/TablePager.vue'
-import AddModal from '@/components/generic/AddModal.vue'
+import AddEditModal from '@/components/generic/AddEditModal.vue'
+import DeleteModal from '@/components/generic/DeleteModal.vue'
 
 const page = ref(1)
 const result = ref(null)
@@ -12,10 +13,15 @@ const loading = ref(true)
 const error = ref('')
 const search = ref('')
 
-// Add-degree modal, plus the state AddModal renders while the create runs.
+// Add-degree modal, plus the state AddEditModal renders while the create runs.
 const adding = ref(false)
 const creating = ref(false)
 const createError = ref('')
+
+// The degree open in the edit modal, plus the same pair of states for the save.
+const editTarget = ref(null)
+const saving = ref(false)
+const editError = ref('')
 
 // Campuses back the campus dropdown. Loaded on first open and kept after, so
 // reopening the modal does not refetch.
@@ -58,7 +64,6 @@ async function loadCampuses() {
   try {
     const res = await api.getCampuses()
     campuses.value = res?.data ?? []
-    console.warn("Value of campus", campuses?.value)
   } catch (e) {
     campusesError.value = e?.detail || 'Could not load campuses.'
   } finally {
@@ -92,8 +97,35 @@ async function createDegree(values) {
   }
 }
 
-// TODO: open the edit-degree modal once it exists.
-function editDegree(degree) {}
+function editDegree(degree) {
+  editError.value = ''
+  editTarget.value = degree
+  loadCampuses()
+}
+
+function cancelEdit() {
+  editTarget.value = null
+  editError.value = ''
+}
+
+async function saveDegree(values) {
+  const degree = editTarget.value
+  if (!degree) return
+  saving.value = true
+  editError.value = ''
+  try {
+    // The row's own campus addresses the record; `values.campus_id` may be a
+    // different one, which is how a degree moves between campuses.
+    await api.editDegree(degree.campus_id, degreeId(degree), values)
+    editTarget.value = null
+    await load()
+  } catch (e) {
+    // Kept in the modal so the edits survive and can be retried.
+    editError.value = e?.detail || 'Failed to save degree program.'
+  } finally {
+    saving.value = false
+  }
+}
 
 // TODO: call the delete endpoint once the API exposes one for degree programs.
 async function deleteDegree(degree) {
@@ -112,16 +144,16 @@ const columns = [
 // names it differently.
 const campusId = (c) => c?.campus_id
 
-// POST /campus/{campus_id}/degrees takes all four keys; college and
-// college_long accept null, so they are left optional here.
-const addFields = computed(() => [
+// Shared by the add and edit modals: both endpoints take the same four keys,
+// and college / college_long accept null, so they are left optional here.
+const degreeFields = computed(() => [
   {
     key: 'campus_id',
     label: 'Campus',
     type: 'select',
     required: true,
     options: campuses.value.map((c) => ({
-      value: campusId(c),
+      value: c?._id,
       label: c.campus_name ? `${c.campus_name} (${c?._id ?? c?.id})` : campusId(c),
     })),
     optionsLoading: campusesLoading.value,
@@ -234,16 +266,28 @@ const lastOnPage = computed(() =>
     <TablePager v-model:page="page" :total-pages="result.total_pages" />
   </template>
 
-  <AddModal
+  <AddEditModal
     v-if="adding"
     title="Add degree program"
     description="Records a degree program under a campus."
     submit-label="Add degree program"
-    :fields="addFields"
+    :fields="degreeFields"
     :busy="creating"
     :error="createError"
     @close="cancelAdd"
     @submit="createDegree"
+  />
+
+  <AddEditModal
+    v-if="editTarget"
+    title="Edit degree program"
+    :description="`Updating ${editTarget.course_name}.`"
+    :fields="degreeFields"
+    :values="editTarget"
+    :busy="saving"
+    :error="editError"
+    @close="cancelEdit"
+    @submit="saveDegree"
   />
 </template>
 

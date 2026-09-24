@@ -1,18 +1,25 @@
 <script setup>
 /**
- * Form dialog for creating a record, driven by a field schema.
+ * Form dialog for creating or editing a record, driven by a field schema.
  *
  * The caller describes the form with `fields` and owns the operation: `submit`
  * fires with the collected values and the modal stays open so the caller can
  * drive `busy` while the request runs and surface `error` in place if it
- * fails. The caller closes it by dropping the `v-if` once the create succeeds.
+ * fails. The caller closes it by dropping the `v-if` once the write succeeds.
+ *
+ * Passing `values` puts the modal in edit mode: the form opens prefilled from
+ * that record and the default title and button labels switch to edit wording.
+ * The payload shape is identical either way — every field key is always
+ * present — so the caller hands it straight to an add or a PATCH.
  *
  * A field descriptor:
  *   key             key this field's value takes in the emitted payload
  *   label           visible label; falls back to `key`
- *   type            'string' | 'number' | 'boolean' | 'select' (default 'string')
+ *   type            'string' | 'number' | 'boolean' | 'select' | 'password'
+ *                   (default 'string'). 'password' masks the input; it is
+ *                   otherwise treated (and trimmed) like a string.
  *   required        blocks submit while empty
- *   default         initial value
+ *   default         initial value; `values` takes precedence in edit mode
  *   placeholder     string/number/select only
  *   hint            helper text under the field
  *   disabled        renders the control read-only
@@ -25,31 +32,69 @@
  * optional text comes through as null (the key is always present), and
  * booleans are always true/false.
  */
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, useId } from 'vue'
 
 const props = defineProps({
-  title: { type: String, default: 'Add Record' },
+  /** Falls back to 'Add record' / 'Edit record' depending on the mode. */
+  title: { type: String, default: '' },
   /** Optional sentence under the title. */
   description: { type: String, default: '' },
   /** Field descriptors — see the block comment above. */
   fields: { type: Array, required: true },
-  submitLabel: { type: String, default: 'Add' },
-  /** Replaces `submitLabel` while the caller's create runs. */
-  busyLabel: { type: String, default: 'Adding…' },
+  /**
+   * Existing record to edit, keyed like `fields`. Its presence is what puts
+   * the modal in edit mode; omit it to create.
+   */
+  values: { type: Object, default: null },
+  /** Falls back to 'Add' / 'Save changes' depending on the mode. */
+  submitLabel: { type: String, default: '' },
+  /** Replaces the submit label while the caller's write runs. */
+  busyLabel: { type: String, default: '' },
   cancelLabel: { type: String, default: 'Cancel' },
-  /** Disables the form and shows progress while the caller's create runs. */
+  /** Disables the form and shows progress while the caller's write runs. */
   busy: { type: Boolean, default: false },
-  /** Message from a failed create, rendered above the buttons. */
+  /** Message from a failed write, rendered above the buttons. */
   error: { type: String, default: '' },
 })
 
 const emit = defineEmits(['close', 'submit'])
 
+const editing = computed(() => props.values !== null)
+
+// Wording only: the caller can override any of these, and everything else
+// about the two modes is identical.
+const headingText = computed(
+  () => props.title || (editing.value ? 'Edit record' : 'Add record')
+)
+const submitText = computed(
+  () => props.submitLabel || (editing.value ? 'Save changes' : 'Add')
+)
+const busyText = computed(
+  () => props.busyLabel || (editing.value ? 'Saving…' : 'Adding…')
+)
+
+// Field ids have to be unique per instance — two of these modals can share a
+// page, and a stale duplicate id would point a label at the wrong control.
+const uid = useId()
+const fieldId = (key) => `${uid}-${key}`
+const errorId = (key) => `${uid}-err-${key}`
+
 const typeOf = (field) => field.type || 'string'
 
+const inputType = (field) => {
+  const type = typeOf(field)
+  return type === 'number' || type === 'password' ? type : 'text'
+}
+
 function initialValue(field) {
-  if (field.default !== undefined) return field.default
-  return typeOf(field) === 'boolean' ? false : ''
+  // An edit starts from the record; a missing key there still means "empty",
+  // so only `undefined` falls through to the field's own default.
+  const existing = props.values?.[field.key]
+  const seed = existing === undefined ? field.default : existing
+
+  if (typeOf(field) === 'boolean') return Boolean(seed)
+  // null is how the API spells an unset optional; inputs want ''.
+  return seed === undefined || seed === null ? '' : seed
 }
 
 // Built once on open. `fields` is deliberately not watched: callers pass
@@ -71,6 +116,19 @@ const optionsOf = (field) =>
   (field.options ?? []).map((o) =>
     o !== null && typeof o === 'object' ? o : { value: o, label: String(o) }
   )
+
+/**
+ * What the dropdown actually renders. An edit can start from a value the list
+ * does not carry — most often because the options are still being fetched —
+ * and a select with no matching option renders blank, so the current value
+ * gets a stand-in entry until the real one shows up.
+ */
+function selectOptions(field) {
+  const options = optionsOf(field)
+  const value = form[field.key]
+  if (value === '' || options.some((o) => o.value === value)) return options
+  return [{ value, label: String(value) }, ...options]
+}
 
 function clearError(key) {
   fieldErrors[key] = ''
@@ -153,12 +211,12 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
         class="modal-panel"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="add-modal-title"
+        :aria-labelledby="`${uid}-title`"
       >
 
         <div class="modal-header">
           <div>
-            <h3 id="add-modal-title">{{ title }}</h3>
+            <h3 :id="`${uid}-title`">{{ headingText }}</h3>
             <p v-if="description" class="sub">{{ description }}</p>
           </div>
           <button class="close-btn" aria-label="Close" :disabled="busy" @click="close">
@@ -172,24 +230,24 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
             <!-- Checkbox carries its own inline label, so the block label is
                  skipped to avoid announcing the name twice. -->
-            <label v-if="typeOf(field) !== 'boolean'" :for="`add-${field.key}`">
+            <label v-if="typeOf(field) !== 'boolean'" :for="fieldId(field.key)">
               {{ field.label || field.key }}
               <span v-if="field.required" class="req" aria-hidden="true">*</span>
             </label>
 
             <select
               v-if="typeOf(field) === 'select'"
-              :id="`add-${field.key}`"
+              :id="fieldId(field.key)"
               v-model="form[field.key]"
               :disabled="busy || field.disabled || field.optionsLoading"
               :aria-invalid="fieldErrors[field.key] ? 'true' : undefined"
-              :aria-describedby="fieldErrors[field.key] ? `err-${field.key}` : undefined"
+              :aria-describedby="fieldErrors[field.key] ? errorId(field.key) : undefined"
               @change="clearError(field.key)"
             >
               <option value="" disabled>
                 {{ field.optionsLoading ? 'Loading…' : field.placeholder || 'Select one' }}
               </option>
-              <option v-for="o in optionsOf(field)" :key="o.value" :value="o.value">
+              <option v-for="o in selectOptions(field)" :key="o.value" :value="o.value">
                 {{ o.label }}
               </option>
             </select>
@@ -197,10 +255,10 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
             <label
               v-else-if="typeOf(field) === 'boolean'"
               class="check"
-              :for="`add-${field.key}`"
+              :for="fieldId(field.key)"
             >
               <input
-                :id="`add-${field.key}`"
+                :id="fieldId(field.key)"
                 v-model="form[field.key]"
                 type="checkbox"
                 :disabled="busy || field.disabled"
@@ -210,20 +268,21 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
 
             <input
               v-else
-              :id="`add-${field.key}`"
+              :id="fieldId(field.key)"
               v-model="form[field.key]"
-              :type="typeOf(field) === 'number' ? 'number' : 'text'"
+              :type="inputType(field)"
+              :autocomplete="typeOf(field) === 'password' ? 'new-password' : undefined"
               :placeholder="field.placeholder"
               :min="field.min"
               :max="field.max"
               :step="field.step"
               :disabled="busy || field.disabled"
               :aria-invalid="fieldErrors[field.key] ? 'true' : undefined"
-              :aria-describedby="fieldErrors[field.key] ? `err-${field.key}` : undefined"
+              :aria-describedby="fieldErrors[field.key] ? errorId(field.key) : undefined"
               @input="clearError(field.key)"
             />
 
-            <p v-if="fieldErrors[field.key]" :id="`err-${field.key}`" class="field-error">
+            <p v-if="fieldErrors[field.key]" :id="errorId(field.key)" class="field-error">
               {{ fieldErrors[field.key] }}
             </p>
             <p v-else-if="field.hint" class="hint">{{ field.hint }}</p>
@@ -237,7 +296,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown))
               {{ cancelLabel }}
             </button>
             <button type="submit" class="btn" :disabled="busy">
-              {{ busy ? busyLabel : submitLabel }}
+              {{ busy ? busyText : submitText }}
             </button>
           </div>
 

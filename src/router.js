@@ -39,6 +39,16 @@ const routes = [
         path: "members",
         name: "manage-members",
         component: () => import('./views/manage/MembersView.vue')
+      },
+      {
+        path: "user-roles",
+        name: "manage-user-roles",
+        component: () => import('./views/manage/UserRolesView.vue')
+      },
+      {
+        path: "users",
+        name: "manage-users",
+        component: () => import('./views/manage/UsersView.vue')
       }
     ],
     meta: { requiresAuth: true, isAdmin: true }

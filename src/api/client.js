@@ -74,36 +74,33 @@ function defaultMessage(status) {
 }
 
 export const api = {
-  // POST /authenticate -> { access_token, token_type, user }
   authenticate: (username, password) =>
     request('/authenticate', { method: 'POST', auth: false, body: { username, password } }),
 
-  // POST /logout — revokes the token's jti server-side.
   logout: () => request('/logout', { method: 'POST' }),
 
-  // GET /meta/semesters -> { data: [{ year, semester }], total }
   semesters: () => request('/meta/semesters', { auth: false }),
 
   getCommittees: () => request('/committees'),
   deleteCommittee: (comm_id, subcommittee) => request(`/committees/${comm_id}/${subcommittee}`, { method: 'DELETE' }),
 
+  getCampusDegreePrograms: (campus_id, page = 1) => request(`/campus/${campus_id}/degrees`, { params: { page }}),
   getDegrees: ({ page = 1 }) => request('/degrees', { params: { page }}), // NOTE: this will be updated when the sort is handled
-  // POST /campus/{campus_id}/degrees -> CampusDegrees
-  // Requires create:all or create:campus. `college` and `college_long` are
-  // nullable, but the body must carry all four keys.
   addDegree: ({ campus_id, course_name, college = null, college_long = null }) =>
     request(`/campus/${campus_id}/degrees`, {
       method: 'POST',
       body: { campus_id, course_name, college, college_long },
     }),
+  editDegree: (campus_id, degree_id, { campus_id: to_campus_id, course_name, college = null, college_long = null }) => request(
+    `/campus/${campus_id}/degrees/${degree_id}`,
+    {
+      method: 'PATCH',
+      body: { campus_id: to_campus_id ?? campus_id, course_name, college, college_long }
+    }
+  ),
 
-  // GET /reaffiliations/{YYYY[AB]}/summary -> ReaffiliationAnalytics
-  // Requires read:all or read:reaff.
   getReaffiliationsSummary: (fullSemester) => request(`/reaffiliations/${fullSemester}/summary`),
 
-  // GET /members?year&sem&page -> PaginatedMembers
-  // The one endpoint carrying member names; /reaffiliations returns fact rows only.
-  // Requires read:all or read:member.
   getMembers: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } }),
   getSingleMemberHistory: ({ dssoc_id }) => request(`/members/history/${dssoc_id}`),
   editMember: (dssoc_id, member) => request(`/members/${dssoc_id}`, { method: 'PATCH', body: member }),
@@ -111,12 +108,14 @@ export const api = {
 
   getCampuses: () => request('/campus'),
 
-  getCampusDegreePrograms: (campus_id, page = 1) => request(`/campus/${campus_id}/degrees`, { params: { page }}),
-
-  // GET /reaffiliations
   getReaffiliations: ({ year, sem, campus_id = null, comm_id = null, include_member_data = false, page = 1}) => 
     request('/reaffiliations', { params: { year, sem, campus_id, comm_id, include_member_data, page } }),
   deleteReaffiliation: ( id ) => request(`/reaffiliations/reaff/${id}`, { method: 'DELETE' }, ),
+
+  addUser: (username, password) => request('/user/create', { method: 'POST', body: { username, password }}),
+  getUsers: ({ page = 1 }) => request('/admin/users', { params: { page }}),
+
+  getUserRoles: ({ page = 1 }) => request('/admin/user-roles', { params: { page }}),
 
   changePassword: ({ old_password, new_password }) => request('/api/change-password', { method: 'POST', body: { old_password, new_password }})
 }
