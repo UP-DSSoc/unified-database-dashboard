@@ -99,7 +99,7 @@ export const api = {
     }
   ),
 
-  getReaffiliationsSummary: (fullSemester) => request(`/reaffiliations/${fullSemester}/summary`),
+  getReaffiliationsSummary: ({ year, semester = null, start_semester = null, end_semester = null}) => request(`/reaffiliations/summary`, { params: { year, semester, start_semester, end_semester }}),
 
   getMembers: ({ year, sem, page = 1 }) => request('/members', { params: { year, sem, page } }),
   getSingleMemberHistory: ({ dssoc_id }) => request(`/members/history/${dssoc_id}`),
@@ -117,7 +117,7 @@ export const api = {
 
   getUserRoles: ({ page = 1 }) => request('/admin/user-roles', { params: { page }}),
 
-  changePassword: ({ old_password, new_password }) => request('/api/change-password', { method: 'POST', body: { old_password, new_password }})
+  changePassword: ({ old_password, new_password }) => request('/recovery/change-password', { method: 'POST', body: { old_password, new_password }})
 }
 
 export const semesterCode = (year, semester) => `${year}${semester}`
